@@ -18,12 +18,29 @@ function indent() {
   esac
 }
 
+function error() {
+  echo " !     $*" >&2
+  exit 1
+}
+
 BUILD_DIR=${1:-}
 CACHE_DIR=${2:-}
 ENV_DIR=${3:-}
 
 BIN_DIR=$BUILD_DIR/.chromedriver/bin
 mkdir -p $BIN_DIR
+
+topic "Detecting Google Chrome binary"
+if hash google-chrome-stable 2>/dev/null; then
+  CHROME_BIN=$(which google-chrome-stable)
+elif hash google-chrome-beta; then
+  CHROME_BIN=$(which google-chrome-beta)
+elif hash google-chrome-unsatable; then
+  CHROME_BIN=$(which google-chrome-unsatable)
+else
+  error "Google Chrome binary not found. Google Chrome can be installed with https://github.com/heroku/heroku-buildpack-google-chrome"
+fi
+indent "Using Google Chrome at $CHROME_BIN"
 
 topic "Looking up latest chromedriver version"
 LATEST="https://chromedriver.storage.googleapis.com/LATEST_RELEASE"
@@ -41,3 +58,12 @@ indent "Downloaded"
 topic "Creating chromedriver export scripts"
 echo "export PATH=\$PATH:$BIN_DIR" >> /app/.profile.d/chromedriver.sh
 indent "Created"
+
+topic "Creating chromedriver shim"
+mv $BIN_DIR/chromedriver $BIN_DIR/_chromedriver
+SHIM=$BIN_DIR/chromedriver
+cat <<EOF >$SHIM
+#!/usr/bin/env bash
+exec $BIN_DIR/_chromedriver --binary $CHROME_BIN \$@
+EOF
+chmod +x $SHIM
